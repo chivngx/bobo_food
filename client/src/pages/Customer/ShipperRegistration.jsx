@@ -18,6 +18,7 @@ export default function ShipperRegistration() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [registrationStatus, setRegistrationStatus] = useState(null); // null | 'already_shipper' | 'shop_restriction' | 'allowed'
   const [popup, setPopup] = useState({ open: false, type: 'info', message: '' });
+  const [errors, setErrors] = useState({});
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -147,9 +148,136 @@ export default function ShipperRegistration() {
     autoFillUserInfo();
   }, []);
 
+  // Validation functions
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePhone = (phone) => {
+    const phoneRegex = /^(0|\+84)(3[2-9]|5[6|8|9]|7[0|6-9]|8[1-9]|9[0-9])[0-9]{7}$/;
+    return phoneRegex.test(phone.replace(/\s/g, ''));
+  };
+
+  const validateIDCard = (idCard) => {
+    const idCardRegex = /^[0-9]{9}$|^[0-9]{12}$/;
+    return idCardRegex.test(idCard);
+  };
+
+  const validateVehiclePlate = (plate) => {
+    const plateRegex = /^[0-9]{2}[A-Z]{1,2}[-\s]?[0-9]{4,5}$/i;
+    return plate.length >= 7 && plate.length <= 12;
+  };
+
+  const validateBankAccount = (account) => {
+    return account.length >= 8 && account.length <= 20 && /^[0-9]+$/.test(account);
+  };
+
+  const validateFileSize = (file, maxSizeMB = 5) => {
+    return file && file.size <= maxSizeMB * 1024 * 1024;
+  };
+
+  const validateFileType = (file, allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf']) => {
+    return file && allowedTypes.includes(file.type);
+  };
+
+  const validateField = (name, value) => {
+    let error = '';
+    
+    switch(name) {
+      case 'fullName':
+        if (!value || value.trim().length < 2) {
+          error = 'Họ tên phải có ít nhất 2 ký tự';
+        } else if (value.trim().length > 100) {
+          error = 'Họ tên không được vượt quá 100 ký tự';
+        }
+        break;
+      case 'phone':
+      case 'relativePhone':
+        if (!value) {
+          if (name === 'phone') error = 'Số điện thoại là bắt buộc';
+        } else if (!validatePhone(value)) {
+          error = 'Số điện thoại không hợp lệ (VD: 0912345678)';
+        }
+        break;
+      case 'email':
+        if (!value) {
+          error = 'Email là bắt buộc';
+        } else if (!validateEmail(value)) {
+          error = 'Email không hợp lệ';
+        }
+        break;
+      case 'idCardNumber':
+        if (value && !validateIDCard(value)) {
+          error = 'CCCD phải có 9 hoặc 12 số';
+        }
+        break;
+      case 'vehiclePlateNumber':
+        if (value && !validateVehiclePlate(value)) {
+          error = 'Biển số xe không hợp lệ (VD: 30A-12345)';
+        }
+        break;
+      case 'bankAccountNumber':
+        if (value && !validateBankAccount(value)) {
+          error = 'Số tài khoản phải từ 8-20 chữ số';
+        }
+        break;
+      case 'bankAccountName':
+      case 'bankOwnerName':
+        if (value && value.trim().length < 2) {
+          error = 'Tên chủ tài khoản phải có ít nhất 2 ký tự';
+        }
+        break;
+      case 'driverLicenseNumber':
+        if (value && value.trim().length < 5) {
+          error = 'Số giấy phép lái xe không hợp lệ';
+        }
+        break;
+      case 'idDocumentExpiryDate':
+        if (value) {
+          const selectedDate = new Date(value);
+          const today = new Date();
+          if (selectedDate <= today) {
+            error = 'Ngày hết hạn phải sau ngày hôm nay';
+          }
+        }
+        break;
+    }
+    
+    return error;
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Clear error when user is typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    const targetElement = e.target; // Save reference
+    
+    // Validate on blur
+    const error = validateField(name, value);
+    setErrors(prev => ({ ...prev, [name]: error }));
+    
+    // Update styles after validation - check if element still exists
+    setTimeout(() => {
+      if (targetElement && targetElement.parentNode) {
+        if (error) {
+          targetElement.style.borderColor = '#ef4444';
+          targetElement.style.backgroundColor = '#fef2f2';
+        } else {
+          targetElement.style.borderColor = '#d1d5db';
+          targetElement.style.backgroundColor = '#fafafa';
+        }
+        targetElement.style.boxShadow = 'none';
+      }
+    }, 0);
   };
 
   const handleSafeNavigate = (path) => {
@@ -168,6 +296,22 @@ export default function ShipperRegistration() {
   const handleFileChange = (e, fieldName) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file size (5MB max)
+      if (!validateFileSize(file, 5)) {
+        setErrors(prev => ({ ...prev, [fieldName]: 'File không được vượt quá 5MB' }));
+        setPopup({ open: true, type: 'error', message: `⚠️ File ${fieldName} không được vượt quá 5MB` });
+        return;
+      }
+      
+      // Validate file type
+      if (!validateFileType(file)) {
+        setErrors(prev => ({ ...prev, [fieldName]: 'Chỉ chấp nhận file ảnh (JPG, PNG, WEBP) hoặc PDF' }));
+        setPopup({ open: true, type: 'error', message: '⚠️ Chỉ chấp nhận file ảnh (JPG, PNG, WEBP) hoặc PDF' });
+        return;
+      }
+      
+      // Clear error if validation passes
+      setErrors(prev => ({ ...prev, [fieldName]: '' }));
       setFiles(prev => ({ ...prev, [fieldName]: file }));
       
       // Create preview
@@ -182,9 +326,52 @@ export default function ShipperRegistration() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validation
-    if (!formData.fullName || !formData.phone || !formData.email) {
-      setPopup({ open: true, type: 'error', message: '⚠️ Vui lòng điền đầy đủ thông tin bắt buộc' });
+    // Comprehensive validation
+    const newErrors = {};
+    
+    // Validate all required fields
+    if (!formData.fullName || formData.fullName.trim().length < 2) {
+      newErrors.fullName = 'Họ tên là bắt buộc và phải có ít nhất 2 ký tự';
+    }
+    
+    if (!formData.phone) {
+      newErrors.phone = 'Số điện thoại là bắt buộc';
+    } else if (!validatePhone(formData.phone)) {
+      newErrors.phone = 'Số điện thoại không hợp lệ';
+    }
+    
+    if (!formData.email) {
+      newErrors.email = 'Email là bắt buộc';
+    } else if (!validateEmail(formData.email)) {
+      newErrors.email = 'Email không hợp lệ';
+    }
+    
+    // Validate optional but important fields
+    if (formData.idCardNumber && !validateIDCard(formData.idCardNumber)) {
+      newErrors.idCardNumber = 'CCCD phải có 9 hoặc 12 số';
+    }
+    
+    if (formData.vehiclePlateNumber && !validateVehiclePlate(formData.vehiclePlateNumber)) {
+      newErrors.vehiclePlateNumber = 'Biển số xe không hợp lệ';
+    }
+    
+    if (formData.bankAccountNumber && !validateBankAccount(formData.bankAccountNumber)) {
+      newErrors.bankAccountNumber = 'Số tài khoản phải từ 8-20 chữ số';
+    }
+    
+    if (formData.relativePhone && !validatePhone(formData.relativePhone)) {
+      newErrors.relativePhone = 'Số điện thoại người thân không hợp lệ';
+    }
+    
+    // Check if there are any validation errors
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setPopup({ open: true, type: 'error', message: '⚠️ Vui lòng kiểm tra lại thông tin đã nhập' });
+      // Scroll to first error
+      const firstErrorField = document.querySelector('.error-field');
+      if (firstErrorField) {
+        firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
 
@@ -242,9 +429,32 @@ export default function ShipperRegistration() {
         uploadFile(files.lltpAppointment),
       ]);
 
+      // Validate required file uploads succeeded
+      if (!health_certificate_url) {
+        setPopup({ open: true, type: 'error', message: '❌ Upload giấy khám sức khỏe thất bại. Vui lòng thử lại.' });
+        setLoading(false);
+        return;
+      }
+      if (lltpOption === 'lltp2' && !criminal_record_url) {
+        setPopup({ open: true, type: 'error', message: '❌ Upload LLTP số 02 thất bại. Vui lòng thử lại.' });
+        setLoading(false);
+        return;
+      }
+      if (lltpOption === 'lltp1_combo' && (!lltp_01_url || !lltp_appointment_url)) {
+        setPopup({ open: true, type: 'error', message: '❌ Upload LLTP số 01 hoặc Giấy hẹn thất bại. Vui lòng thử lại.' });
+        setLoading(false);
+        return;
+      }
+
       // Get current user id for linking
       const me = await getCurrentUser();
       const user_id = me?.user?.id;
+
+      if (!user_id) {
+        setPopup({ open: true, type: 'error', message: '❌ Không tìm thấy thông tin người dùng. Vui lòng đăng nhập lại.' });
+        setLoading(false);
+        return;
+      }
 
       // Build payload matching shipper_contracts model
       const payload = {
@@ -581,7 +791,7 @@ export default function ShipperRegistration() {
             Thông tin cá nhân
           </h2>
 
-          <div style={{ marginBottom: '2rem' }}>
+          <div style={{ marginBottom: '2rem' }} className={errors.fullName ? 'error-field' : ''}>
             <label style={{
               display: 'block',
               marginBottom: '0.75rem',
@@ -601,28 +811,34 @@ export default function ShipperRegistration() {
               style={{
                 width: '100%',
                 padding: '1rem 1.25rem',
-                border: '0.125rem solid #d1d5db',
+                border: errors.fullName ? '0.125rem solid #ef4444' : '0.125rem solid #d1d5db',
                 borderRadius: '0.75rem',
                 fontSize: '1.125rem',
                 outline: 'none',
                 transition: 'all 0.2s',
                 boxSizing: 'border-box',
-                backgroundColor: '#fafafa'
+                backgroundColor: errors.fullName ? '#fef2f2' : '#fafafa'
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = '#f97316';
+                e.target.style.borderColor = errors.fullName ? '#ef4444' : '#f97316';
                 e.target.style.backgroundColor = '#fff';
-                e.target.style.boxShadow = '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
+                e.target.style.boxShadow = errors.fullName ? '0 0 0 0.25rem rgba(239, 68, 68, 0.1)' : '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
               }}
               onBlur={(e) => {
-                e.target.style.borderColor = '#d1d5db';
-                e.target.style.backgroundColor = '#fafafa';
+                handleBlur(e);
+                e.target.style.borderColor = errors.fullName ? '#ef4444' : '#d1d5db';
+                e.target.style.backgroundColor = errors.fullName ? '#fef2f2' : '#fafafa';
                 e.target.style.boxShadow = 'none';
               }}
             />
+            {errors.fullName && (
+              <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                ⚠️ {errors.fullName}
+              </div>
+            )}
           </div>
 
-          <div style={{ marginBottom: '2rem' }}>
+          <div style={{ marginBottom: '2rem' }} className={errors.phone ? 'error-field' : ''}>
             <label style={{
               display: 'block',
               marginBottom: '0.75rem',
@@ -642,28 +858,34 @@ export default function ShipperRegistration() {
               style={{
                 width: '100%',
                 padding: '1rem 1.25rem',
-                border: '0.125rem solid #d1d5db',
+                border: errors.phone ? '0.125rem solid #ef4444' : '0.125rem solid #d1d5db',
                 borderRadius: '0.75rem',
                 fontSize: '1.125rem',
                 outline: 'none',
                 transition: 'all 0.2s',
                 boxSizing: 'border-box',
-                backgroundColor: '#fafafa'
+                backgroundColor: errors.phone ? '#fef2f2' : '#fafafa'
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = '#f97316';
+                e.target.style.borderColor = errors.phone ? '#ef4444' : '#f97316';
                 e.target.style.backgroundColor = '#fff';
-                e.target.style.boxShadow = '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
+                e.target.style.boxShadow = errors.phone ? '0 0 0 0.25rem rgba(239, 68, 68, 0.1)' : '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
               }}
               onBlur={(e) => {
-                e.target.style.borderColor = '#d1d5db';
-                e.target.style.backgroundColor = '#fafafa';
+                handleBlur(e);
+                e.target.style.borderColor = errors.phone ? '#ef4444' : '#d1d5db';
+                e.target.style.backgroundColor = errors.phone ? '#fef2f2' : '#fafafa';
                 e.target.style.boxShadow = 'none';
               }}
             />
+            {errors.phone && (
+              <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                ⚠️ {errors.phone}
+              </div>
+            )}
           </div>
 
-          <div style={{ marginBottom: '2rem' }}>
+          <div style={{ marginBottom: '2rem' }} className={errors.email ? 'error-field' : ''}>
             <label style={{
               display: 'block',
               marginBottom: '0.75rem',
@@ -683,28 +905,34 @@ export default function ShipperRegistration() {
               style={{
                 width: '100%',
                 padding: '1rem 1.25rem',
-                border: '0.125rem solid #d1d5db',
+                border: errors.email ? '0.125rem solid #ef4444' : '0.125rem solid #d1d5db',
                 borderRadius: '0.75rem',
                 fontSize: '1.125rem',
                 outline: 'none',
                 transition: 'all 0.2s',
                 boxSizing: 'border-box',
-                backgroundColor: '#fafafa'
+                backgroundColor: errors.email ? '#fef2f2' : '#fafafa'
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = '#f97316';
+                e.target.style.borderColor = errors.email ? '#ef4444' : '#f97316';
                 e.target.style.backgroundColor = '#fff';
-                e.target.style.boxShadow = '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
+                e.target.style.boxShadow = errors.email ? '0 0 0 0.25rem rgba(239, 68, 68, 0.1)' : '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
               }}
               onBlur={(e) => {
-                e.target.style.borderColor = '#d1d5db';
-                e.target.style.backgroundColor = '#fafafa';
+                handleBlur(e);
+                e.target.style.borderColor = errors.email ? '#ef4444' : '#d1d5db';
+                e.target.style.backgroundColor = errors.email ? '#fef2f2' : '#fafafa';
                 e.target.style.boxShadow = 'none';
               }}
             />
+            {errors.email && (
+              <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                ⚠️ {errors.email}
+              </div>
+            )}
           </div>
 
-          <div style={{ marginBottom: '2rem' }}>
+          <div style={{ marginBottom: '2rem' }} className={errors.idCardNumber ? 'error-field' : ''}>
             <label style={{
               display: 'block',
               marginBottom: '0.75rem',
@@ -724,29 +952,30 @@ export default function ShipperRegistration() {
               style={{
                 width: '100%',
                 padding: '1rem 1.25rem',
-                border: '0.125rem solid #d1d5db',
+                border: errors.idCardNumber ? '0.125rem solid #ef4444' : '0.125rem solid #d1d5db',
                 borderRadius: '0.75rem',
                 fontSize: '1.125rem',
                 outline: 'none',
                 transition: 'all 0.2s',
                 boxSizing: 'border-box',
-                backgroundColor: '#fafafa'
+                backgroundColor: errors.idCardNumber ? '#fef2f2' : '#fafafa'
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = '#f97316';
+                e.target.style.borderColor = errors.idCardNumber ? '#ef4444' : '#f97316';
                 e.target.style.backgroundColor = '#fff';
-                e.target.style.boxShadow = '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
+                e.target.style.boxShadow = errors.idCardNumber ? '0 0 0 0.25rem rgba(239, 68, 68, 0.1)' : '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
               }}
-              onBlur={(e) => {
-                e.target.style.borderColor = '#d1d5db';
-                e.target.style.backgroundColor = '#fafafa';
-                e.target.style.boxShadow = 'none';
-              }}
+              onBlur={handleBlur}
             />
+            {errors.idCardNumber && (
+              <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                ⚠️ {errors.idCardNumber}
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
-            <div style={{ marginBottom: '0' }}>
+            <div style={{ marginBottom: '0' }} className={errors.idDocumentExpiryDate ? 'error-field' : ''}>
               <label style={{ display: 'block', marginBottom: '0.75rem', fontSize: '1.125rem', fontWeight: '600', color: '#1f2937' }}>
                 Ngày hết hạn giấy tờ (CMND/CCCD)
               </label>
@@ -758,24 +987,25 @@ export default function ShipperRegistration() {
                 style={{ 
                   width: '100%', 
                   padding: '1rem 1.25rem', 
-                  border: '0.125rem solid #d1d5db', 
+                  border: errors.idDocumentExpiryDate ? '0.125rem solid #ef4444' : '0.125rem solid #d1d5db', 
                   borderRadius: '0.75rem', 
                   fontSize: '1.125rem', 
                   outline: 'none',
-                  backgroundColor: '#fafafa',
+                  backgroundColor: errors.idDocumentExpiryDate ? '#fef2f2' : '#fafafa',
                   transition: 'all 0.2s'
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = '#f97316';
+                  e.target.style.borderColor = errors.idDocumentExpiryDate ? '#ef4444' : '#f97316';
                   e.target.style.backgroundColor = '#fff';
-                  e.target.style.boxShadow = '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
+                  e.target.style.boxShadow = errors.idDocumentExpiryDate ? '0 0 0 0.25rem rgba(239, 68, 68, 0.1)' : '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
                 }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = '#d1d5db';
-                  e.target.style.backgroundColor = '#fafafa';
-                  e.target.style.boxShadow = 'none';
-                }}
+                onBlur={handleBlur}
               />
+              {errors.idDocumentExpiryDate && (
+                <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                  ⚠️ {errors.idDocumentExpiryDate}
+                </div>
+              )}
             </div>
             
           </div>
@@ -842,7 +1072,7 @@ export default function ShipperRegistration() {
                 }}
               />
             </div>
-            <div style={{ marginBottom: '2rem' }}>
+            <div style={{ marginBottom: '2rem' }} className={errors.relativePhone ? 'error-field' : ''}>
               <label style={{ display: 'block', marginBottom: '0.75rem', fontSize: '1.125rem', fontWeight: '600', color: '#1f2937' }}>
                 SĐT người thân
               </label>
@@ -855,25 +1085,26 @@ export default function ShipperRegistration() {
                 style={{ 
                   width: '100%', 
                   padding: '1rem 1.25rem', 
-                  border: '0.125rem solid #d1d5db', 
+                  border: errors.relativePhone ? '0.125rem solid #ef4444' : '0.125rem solid #d1d5db', 
                   borderRadius: '0.75rem',
                   fontSize: '1.125rem',
                   outline: 'none',
-                  backgroundColor: '#fafafa',
+                  backgroundColor: errors.relativePhone ? '#fef2f2' : '#fafafa',
                   transition: 'all 0.2s',
                   boxSizing: 'border-box'
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = '#f97316';
+                  e.target.style.borderColor = errors.relativePhone ? '#ef4444' : '#f97316';
                   e.target.style.backgroundColor = '#fff';
-                  e.target.style.boxShadow = '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
+                  e.target.style.boxShadow = errors.relativePhone ? '0 0 0 0.25rem rgba(239, 68, 68, 0.1)' : '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
                 }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = '#d1d5db';
-                  e.target.style.backgroundColor = '#fafafa';
-                  e.target.style.boxShadow = 'none';
-                }}
+                onBlur={handleBlur}
               />
+              {errors.relativePhone && (
+                <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                  ⚠️ {errors.relativePhone}
+                </div>
+              )}
             </div>
             <div style={{ marginBottom: '0' }}>
               <label style={{ display: 'block', marginBottom: '0.75rem', fontSize: '1.125rem', fontWeight: '600', color: '#1f2937' }}>
@@ -942,7 +1173,7 @@ export default function ShipperRegistration() {
 
           
 
-          <div style={{ marginBottom: '0' }}>
+          <div style={{ marginBottom: '0' }} className={errors.vehiclePlateNumber ? 'error-field' : ''}>
             <label style={{
               display: 'block',
               marginBottom: '0.75rem',
@@ -962,25 +1193,26 @@ export default function ShipperRegistration() {
               style={{
                 width: '100%',
                 padding: '1rem 1.25rem',
-                border: '0.125rem solid #d1d5db',
+                border: errors.vehiclePlateNumber ? '0.125rem solid #ef4444' : '0.125rem solid #d1d5db',
                 borderRadius: '0.75rem',
                 fontSize: '1.125rem',
                 outline: 'none',
                 transition: 'all 0.2s',
                 boxSizing: 'border-box',
-                backgroundColor: '#fafafa'
+                backgroundColor: errors.vehiclePlateNumber ? '#fef2f2' : '#fafafa'
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = '#f97316';
+                e.target.style.borderColor = errors.vehiclePlateNumber ? '#ef4444' : '#f97316';
                 e.target.style.backgroundColor = '#fff';
-                e.target.style.boxShadow = '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
+                e.target.style.boxShadow = errors.vehiclePlateNumber ? '0 0 0 0.25rem rgba(239, 68, 68, 0.1)' : '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
               }}
-              onBlur={(e) => {
-                e.target.style.borderColor = '#d1d5db';
-                e.target.style.backgroundColor = '#fafafa';
-                e.target.style.boxShadow = 'none';
-              }}
+              onBlur={handleBlur}
             />
+            {errors.vehiclePlateNumber && (
+              <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                ⚠️ {errors.vehiclePlateNumber}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1009,7 +1241,7 @@ export default function ShipperRegistration() {
             Thông tin ngân hàng
           </h2>
 
-          <div style={{ marginBottom: '1.25rem' }}>
+          <div style={{ marginBottom: '1.25rem' }} className={errors.bankName ? 'error-field' : ''}>
             <label style={{
               display: 'block',
               marginBottom: '0.75rem',
@@ -1029,28 +1261,29 @@ export default function ShipperRegistration() {
               style={{
                 width: '100%',
                 padding: '1rem 1.25rem',
-                border: '0.125rem solid #d1d5db',
+                border: errors.bankName ? '0.125rem solid #ef4444' : '0.125rem solid #d1d5db',
                 borderRadius: '0.75rem',
                 fontSize: '1.125rem',
                 outline: 'none',
                 transition: 'all 0.2s',
                 boxSizing: 'border-box',
-                backgroundColor: '#fafafa'
+                backgroundColor: errors.bankName ? '#fef2f2' : '#fafafa'
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = '#f97316';
+                e.target.style.borderColor = errors.bankName ? '#ef4444' : '#f97316';
                 e.target.style.backgroundColor = '#fff';
-                e.target.style.boxShadow = '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
+                e.target.style.boxShadow = errors.bankName ? '0 0 0 0.25rem rgba(239, 68, 68, 0.1)' : '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
               }}
-              onBlur={(e) => {
-                e.target.style.borderColor = '#d1d5db';
-                e.target.style.backgroundColor = '#fafafa';
-                e.target.style.boxShadow = 'none';
-              }}
+              onBlur={handleBlur}
             />
+            {errors.bankName && (
+              <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                ⚠️ {errors.bankName}
+              </div>
+            )}
           </div>
 
-          <div style={{ marginBottom: '2rem' }}>
+          <div style={{ marginBottom: '2rem' }} className={errors.bankAccountNumber ? 'error-field' : ''}>
             <label style={{
               display: 'block',
               marginBottom: '0.75rem',
@@ -1070,28 +1303,29 @@ export default function ShipperRegistration() {
               style={{
                 width: '100%',
                 padding: '1rem 1.25rem',
-                border: '0.125rem solid #d1d5db',
+                border: errors.bankAccountNumber ? '0.125rem solid #ef4444' : '0.125rem solid #d1d5db',
                 borderRadius: '0.75rem',
                 fontSize: '1.125rem',
                 outline: 'none',
                 transition: 'all 0.2s',
                 boxSizing: 'border-box',
-                backgroundColor: '#fafafa'
+                backgroundColor: errors.bankAccountNumber ? '#fef2f2' : '#fafafa'
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = '#f97316';
+                e.target.style.borderColor = errors.bankAccountNumber ? '#ef4444' : '#f97316';
                 e.target.style.backgroundColor = '#fff';
-                e.target.style.boxShadow = '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
+                e.target.style.boxShadow = errors.bankAccountNumber ? '0 0 0 0.25rem rgba(239, 68, 68, 0.1)' : '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
               }}
-              onBlur={(e) => {
-                e.target.style.borderColor = '#d1d5db';
-                e.target.style.backgroundColor = '#fafafa';
-                e.target.style.boxShadow = 'none';
-              }}
+              onBlur={handleBlur}
             />
+            {errors.bankAccountNumber && (
+              <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                ⚠️ {errors.bankAccountNumber}
+              </div>
+            )}
           </div>
 
-          <div style={{ marginBottom: '2rem' }}>
+          <div style={{ marginBottom: '2rem' }} className={errors.bankAccountName ? 'error-field' : ''}>
             <label style={{
               display: 'block',
               marginBottom: '0.75rem',
@@ -1111,25 +1345,26 @@ export default function ShipperRegistration() {
               style={{
                 width: '100%',
                 padding: '1rem 1.25rem',
-                border: '0.125rem solid #d1d5db',
+                border: errors.bankAccountName ? '0.125rem solid #ef4444' : '0.125rem solid #d1d5db',
                 borderRadius: '0.75rem',
                 fontSize: '1.125rem',
                 outline: 'none',
                 transition: 'all 0.2s',
                 boxSizing: 'border-box',
-                backgroundColor: '#fafafa'
+                backgroundColor: errors.bankAccountName ? '#fef2f2' : '#fafafa'
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = '#f97316';
+                e.target.style.borderColor = errors.bankAccountName ? '#ef4444' : '#f97316';
                 e.target.style.backgroundColor = '#fff';
-                e.target.style.boxShadow = '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
+                e.target.style.boxShadow = errors.bankAccountName ? '0 0 0 0.25rem rgba(239, 68, 68, 0.1)' : '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
               }}
-              onBlur={(e) => {
-                e.target.style.borderColor = '#d1d5db';
-                e.target.style.backgroundColor = '#fafafa';
-                e.target.style.boxShadow = 'none';
-              }}
+              onBlur={handleBlur}
             />
+            {errors.bankAccountName && (
+              <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                ⚠️ {errors.bankAccountName}
+              </div>
+            )}
           </div>
 
           <div style={{ marginBottom: '0' }}>
@@ -1191,7 +1426,7 @@ export default function ShipperRegistration() {
             Thông tin giấy phép lái xe
           </h2>
 
-          <div style={{ marginBottom: '0' }}>
+          <div style={{ marginBottom: '0' }} className={errors.driverLicenseNumber ? 'error-field' : ''}>
             <label style={{
               display: 'block',
               marginBottom: '0.75rem',
@@ -1211,25 +1446,26 @@ export default function ShipperRegistration() {
               style={{
                 width: '100%',
                 padding: '1rem 1.25rem',
-                border: '0.125rem solid #d1d5db',
+                border: errors.driverLicenseNumber ? '0.125rem solid #ef4444' : '0.125rem solid #d1d5db',
                 borderRadius: '0.75rem',
                 fontSize: '1.125rem',
                 outline: 'none',
                 transition: 'all 0.2s',
                 boxSizing: 'border-box',
-                backgroundColor: '#fafafa'
+                backgroundColor: errors.driverLicenseNumber ? '#fef2f2' : '#fafafa'
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = '#f97316';
+                e.target.style.borderColor = errors.driverLicenseNumber ? '#ef4444' : '#f97316';
                 e.target.style.backgroundColor = '#fff';
-                e.target.style.boxShadow = '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
+                e.target.style.boxShadow = errors.driverLicenseNumber ? '0 0 0 0.25rem rgba(239, 68, 68, 0.1)' : '0 0 0 0.25rem rgba(249, 115, 22, 0.1)';
               }}
-              onBlur={(e) => {
-                e.target.style.borderColor = '#d1d5db';
-                e.target.style.backgroundColor = '#fafafa';
-                e.target.style.boxShadow = 'none';
-              }}
+              onBlur={handleBlur}
             />
+            {errors.driverLicenseNumber && (
+              <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.5rem', fontWeight: '500' }}>
+                ⚠️ {errors.driverLicenseNumber}
+              </div>
+            )}
           </div>
         </div>
 

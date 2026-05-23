@@ -71,7 +71,10 @@ class OrderDao extends GenericDao {
   /** ============================================================
    * 🚚 LẤY DANH SÁCH ĐƠN THEO SHIPPER_ID
    * ============================================================ */
-  async getOrdersByShipperId(shipperId, { status, limit = 20, offset = 0 } = {}) {
+  async getOrdersByShipperId(
+    shipperId,
+    { status, limit = 20, offset = 0 } = {}
+  ) {
     const params = [shipperId];
     let sql = `
       SELECT *
@@ -83,7 +86,9 @@ class OrderDao extends GenericDao {
       sql += ` AND status = $${params.length}`;
     }
     params.push(limit, offset);
-    sql += ` ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length};`;
+    sql += ` ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${
+      params.length
+    };`;
 
     const res = await pool.query(sql, params);
     return res.rows.map((r) => new this.Model(r));
@@ -104,10 +109,12 @@ class OrderDao extends GenericDao {
       idSql += ` AND o.status = $${baseParams.length}`;
     }
     baseParams.push(limit, offset);
-    idSql += ` ORDER BY o.created_at DESC LIMIT $${baseParams.length - 1} OFFSET $${baseParams.length};`;
+    idSql += ` ORDER BY o.created_at DESC LIMIT $${
+      baseParams.length - 1
+    } OFFSET $${baseParams.length};`;
 
     const idsRes = await pool.query(idSql, baseParams);
-    const ids = idsRes.rows.map(r => r.order_id);
+    const ids = idsRes.rows.map((r) => r.order_id);
     if (ids.length === 0) return [];
 
     const ordersRes = await pool.query(
@@ -158,7 +165,7 @@ class OrderDao extends GenericDao {
       detailMap.get(row.order_id).push(row);
     }
 
-    return ordersRes.rows.map(or => ({
+    return ordersRes.rows.map((or) => ({
       order: or,
       details: detailMap.get(or.order_id) || [],
     }));
@@ -181,8 +188,28 @@ class OrderDao extends GenericDao {
     return res.rows[0] ? new this.Model(res.rows[0]) : null;
   }
 
+  async assignShipperIfCooking({ orderId, shipperId }) {
+    const result = await pool.query(
+      `
+    UPDATE orders
+       SET shipper_id = $1,
+           updated_at = NOW()
+     WHERE order_id   = $2
+       AND status     = 'cooking'
+       AND shipper_id IS NULL`,
+      [shipperId, orderId]
+    );
+    return result.rowCount > 0;
+  }
+
   async updateStatus(orderId, status) {
-    const allowed = ["pending", "cooking", "shipping", "completed", "cancelled"];
+    const allowed = [
+      "pending",
+      "cooking",
+      "shipping",
+      "completed",
+      "cancelled",
+    ];
     if (!allowed.includes(status)) throw new Error(`Invalid status: ${status}`);
 
     const res = await pool.query(
@@ -198,9 +225,36 @@ class OrderDao extends GenericDao {
     return res.rows[0] ? new this.Model(res.rows[0]) : null;
   }
 
+  async updateStatusToShipping({ orderId, shipperId }) {
+    const sql = 
+   `UPDATE orders
+       SET status='shipping', updated_at=NOW()
+     WHERE order_id=$1
+       AND shipper_id=$2
+       AND status='cooking'`
+  ;
+    const r = await pool.query(sql, [orderId, shipperId]);
+    return r.rowCount > 0;
+  }
+
+  async completeIfOwnedByShipper({ orderId, shipperId }) {
+    const sql = 
+      `UPDATE orders
+         SET status='completed',
+             updated_at = NOW()
+       WHERE order_id = $1
+         AND shipper_id = $2
+         AND status IN ('shipping')         -- chặt chẽ: chỉ khi đang giao
+      RETURNING *;`
+    ;
+    const r = await pool.query(sql, [orderId, shipperId]);
+    return r.rows[0] || null;
+  }
+
   async updatePaymentStatus(orderId, paymentStatus) {
     const allowed = ["unpaid", "paid", "refunded"];
-    if (!allowed.includes(paymentStatus)) throw new Error(`Invalid payment status: ${paymentStatus}`);
+    if (!allowed.includes(paymentStatus))
+      throw new Error(`Invalid payment status: ${paymentStatus}`);
 
     const res = await pool.query(
       `
@@ -257,7 +311,9 @@ class OrderDao extends GenericDao {
       sql += ` AND o.status = $${params.length}`;
     }
     params.push(limit, offset);
-    sql += ` ORDER BY o.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length};`;
+    sql += ` ORDER BY o.created_at DESC LIMIT $${params.length - 1} OFFSET $${
+      params.length
+    };`;
 
     const res = await pool.query(sql, params);
     return res.rows;
@@ -316,7 +372,9 @@ class OrderDao extends GenericDao {
       sql += ` AND o.status = $${params.length}`;
     }
     params.push(limit, offset);
-    sql += ` ORDER BY o.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length};`;
+    sql += ` ORDER BY o.created_at DESC LIMIT $${params.length - 1} OFFSET $${
+      params.length
+    };`;
 
     const res = await pool.query(sql, params);
     return res.rows.map((r) => ({ ...r }));
@@ -440,10 +498,12 @@ class OrderDao extends GenericDao {
       sql += ` AND status = $${params.length}`;
     }
     params.push(limit, offset);
-    sql += ` ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length};`;
+    sql += ` ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${
+      params.length
+    };`;
 
     const res = await pool.query(sql, params);
-    return res.rows.map(r => new this.Model(r));
+    return res.rows.map((r) => new this.Model(r));
   }
 
   async getStatusOnly(orderId) {

@@ -783,6 +783,105 @@ export default function ConfirmOrder() {
         })}
       </div>
 
+      {/* PAYMENT METHOD */}
+      <div
+        style={{
+          background: "white",
+          borderRadius: "1.6rem",
+          margin: "2.5vh auto",
+          width: "91.67vw",
+          padding: "1.5rem",
+          boxShadow: "0 2px 12px rgba(0, 0, 0, 0.06)",
+          cursor: "pointer",
+        }}
+        onClick={() => navigate("/customer/payment-method")}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            {paymentMethodName === "Chuyển khoản" ? (
+              <CardIcon />
+            ) : (
+              <PaymentIcon />
+            )}
+            <div>
+              <div
+                style={{
+                  color: "#1A1A1A",
+                  fontSize: "1.4rem",
+                  fontWeight: "700",
+                }}
+              >
+                {paymentMethodName || "Tiền mặt"}
+              </div>
+              <div
+                style={{
+                  color: "#666",
+                  fontSize: "1.2rem",
+                  marginTop: "0.3rem",
+                }}
+              >
+                {paymentMethodName === "Chuyển khoản"
+                  ? "Thanh toán bằng cách quét mã QR"
+                  : "Thanh toán bằng tiền mặt khi nhận hàng"}
+              </div>
+            </div>
+          </div>
+          <div
+            style={{
+              color: "#FE5621",
+              fontSize: "1.3rem",
+              fontWeight: "700",
+            }}
+          >
+            Sửa
+          </div>
+        </div>
+      </div>
+
+      {/* Ghi chú */}
+      <div
+        style={{
+          background: "white",
+          borderRadius: "1.6rem",
+          margin: "2.5vh auto",
+          width: "91.67vw",
+          padding: "1.5rem",
+          boxShadow: "0 2px 12px rgba(0, 0, 0, 0.06)",
+        }}
+      >
+        <div
+          style={{
+            color: "#1A1A1A",
+            fontSize: "1.4rem",
+            fontWeight: "700",
+            marginBottom: "1rem",
+          }}
+        >
+          Ghi chú cho người bán
+        </div>
+        <textarea
+          placeholder="Nhập ghi chú (nếu có)..."
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          style={{
+            width: "100%",
+            minHeight: "80px",
+            padding: "1rem",
+            fontSize: "1.3rem",
+            border: "1px solid #E0E0E0",
+            borderRadius: "8px",
+            resize: "vertical",
+            fontFamily: "inherit",
+          }}
+        />
+      </div>
+
       {/* PAYMENT DETAILS */}
       <div
         style={{

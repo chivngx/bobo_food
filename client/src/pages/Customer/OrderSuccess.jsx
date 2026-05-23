@@ -46,7 +46,7 @@ const OrderSuccess = () => {
           style={{
             fontSize: "2rem",
             fontWeight: "700",
-            color: "#2BCDD2",
+            color: "#FE5621",
             textAlign: "center",
             marginBottom: "5vh",
           }}
@@ -72,7 +72,7 @@ const OrderSuccess = () => {
           style={{
             width: "87.78vw",
             height: "6.375vh",
-            background: "#2BCDD2",
+            background: "#FE5621",
             borderRadius: 999,
             display: "flex",
             justifyContent: "center",

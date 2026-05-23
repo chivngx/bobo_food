@@ -18,6 +18,7 @@ export default function ShopRegistration() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [registrationStatus, setRegistrationStatus] = useState(null); // null | 'already_shop' | 'shipper_restriction' | 'allowed'
   const [popup, setPopup] = useState({ open: false, type: 'info', message: '' });
+  const [errors, setErrors] = useState({});
   const [formData, setFormData] = useState({
     shopName: '',
     shopDescription: '',
@@ -168,9 +169,164 @@ export default function ShopRegistration() {
     autoFillUserInfo();
   }, []);
 
+  // Validation functions
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  const validatePhone = (phone) => {
+    const phoneRegex = /^(0|\+84)(3[2-9]|5[6|8|9]|7[0|6-9]|8[1-9]|9[0-9])[0-9]{7}$/;
+    return phoneRegex.test(phone.replace(/\s/g, ''));
+  };
+
+  const validateIDCard = (idCard) => {
+    const idCardRegex = /^[0-9]{9}$|^[0-9]{12}$/;
+    return idCardRegex.test(idCard);
+  };
+
+  const validateTaxCode = (taxCode) => {
+    const taxCodeRegex = /^[0-9]{10}$|^[0-9]{10}-[0-9]{3}$/;
+    return taxCodeRegex.test(taxCode);
+  };
+
+  const validateBankAccount = (account) => {
+    return account.length >= 8 && account.length <= 20 && /^[0-9]+$/.test(account);
+  };
+
+  const validateBusinessLicense = (license) => {
+    return license.length >= 8 && license.length <= 20;
+  };
+
+  const validateTime = (time) => {
+    const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    return timeRegex.test(time);
+  };
+
+  const validateFileSize = (file, maxSizeMB = 5) => {
+    return file && file.size <= maxSizeMB * 1024 * 1024;
+  };
+
+  const validateFileType = (file, allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf']) => {
+    return file && allowedTypes.includes(file.type);
+  };
+
+  const validateField = (name, value) => {
+    let error = '';
+    
+    switch(name) {
+      case 'shopName':
+        if (!value || value.trim().length < 2) {
+          error = 'Tên shop phải có ít nhất 2 ký tự';
+        } else if (value.trim().length > 200) {
+          error = 'Tên shop không được vượt quá 200 ký tự';
+        }
+        break;
+      case 'shopDescription':
+        if (value && value.trim().length > 1000) {
+          error = 'Mô tả không được vượt quá 1000 ký tự';
+        }
+        break;
+      case 'shopAddress':
+        if (!value || value.trim().length < 10) {
+          error = 'Địa chỉ phải có ít nhất 10 ký tự';
+        } else if (value.trim().length > 500) {
+          error = 'Địa chỉ không được vượt quá 500 ký tự';
+        }
+        break;
+      case 'phone':
+        if (!value) {
+          error = 'Số điện thoại là bắt buộc';
+        } else if (!validatePhone(value)) {
+          error = 'Số điện thoại không hợp lệ (VD: 0912345678)';
+        }
+        break;
+      case 'email':
+        if (!value) {
+          error = 'Email là bắt buộc';
+        } else if (!validateEmail(value)) {
+          error = 'Email không hợp lệ';
+        }
+        break;
+      case 'idCardNumber':
+        if (value && !validateIDCard(value)) {
+          error = 'CCCD phải có 9 hoặc 12 số';
+        }
+        break;
+      case 'taxCode':
+        if (value && !validateTaxCode(value)) {
+          error = 'Mã số thuế phải có 10 số hoặc 10 số-3 số';
+        }
+        break;
+      case 'businessLicenseNumber':
+        if (value && !validateBusinessLicense(value)) {
+          error = 'Số giấy phép kinh doanh phải từ 8-20 ký tự';
+        }
+        break;
+      case 'bankAccountNumber':
+        if (value && !validateBankAccount(value)) {
+          error = 'Số tài khoản phải từ 8-20 chữ số';
+        }
+        break;
+      case 'bankAccountName':
+        if (value && value.trim().length < 2) {
+          error = 'Tên chủ tài khoản phải có ít nhất 2 ký tự';
+        }
+        break;
+      case 'openingTime':
+      case 'closingTime':
+        if (value && !validateTime(value)) {
+          error = 'Thời gian không hợp lệ (VD: 08:00)';
+        }
+        break;
+    }
+    
+    // Validate closing time is after opening time
+    if (name === 'closingTime' && formData.openingTime) {
+      const opening = formData.openingTime.split(':').map(Number);
+      const closing = value.split(':').map(Number);
+      const openingMinutes = opening[0] * 60 + opening[1];
+      const closingMinutes = closing[0] * 60 + closing[1];
+      
+      if (closingMinutes <= openingMinutes) {
+        error = 'Giờ đóng cửa phải sau giờ mở cửa';
+      }
+    }
+    
+    return error;
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // Clear error when user is typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    const targetElement = e.target; // Save reference
+    
+    // Validate on blur
+    const error = validateField(name, value);
+    setErrors(prev => ({ ...prev, [name]: error }));
+    
+    // Update styles after validation - check if element still exists
+    setTimeout(() => {
+      if (targetElement && targetElement.parentNode) {
+        if (error) {
+          targetElement.style.borderColor = '#ef4444';
+          targetElement.style.backgroundColor = '#fef2f2';
+        } else {
+          targetElement.style.borderColor = '#d1d5db';
+          targetElement.style.backgroundColor = '#fafafa';
+        }
+        targetElement.style.boxShadow = 'none';
+      }
+    }, 0);
   };
 
   
@@ -191,6 +347,22 @@ export default function ShopRegistration() {
   const handleFileChange = (e, fieldName) => {
     const file = e.target.files[0];
     if (file) {
+      // Validate file size (5MB max)
+      if (!validateFileSize(file, 5)) {
+        setErrors(prev => ({ ...prev, [fieldName]: 'File không được vượt quá 5MB' }));
+        setPopup({ open: true, type: 'error', message: `⚠️ File ${fieldName} không được vượt quá 5MB` });
+        return;
+      }
+      
+      // Validate file type
+      if (!validateFileType(file)) {
+        setErrors(prev => ({ ...prev, [fieldName]: 'Chỉ chấp nhận file ảnh (JPG, PNG, WEBP) hoặc PDF' }));
+        setPopup({ open: true, type: 'error', message: '⚠️ Chỉ chấp nhận file ảnh (JPG, PNG, WEBP) hoặc PDF' });
+        return;
+      }
+      
+      // Clear error if validation passes
+      setErrors(prev => ({ ...prev, [fieldName]: '' }));
       setFiles(prev => ({ ...prev, [fieldName]: file }));
       
       // Create preview
@@ -205,9 +377,68 @@ export default function ShopRegistration() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validation
-    if (!formData.shopName || !formData.phone || !formData.email || !formData.shopAddress) {
-      setPopup({ open: true, type: 'error', message: '⚠️ Vui lòng điền đầy đủ thông tin bắt buộc' });
+    // Comprehensive validation
+    const newErrors = {};
+    
+    // Validate all required fields
+    if (!formData.shopName || formData.shopName.trim().length < 2) {
+      newErrors.shopName = 'Tên shop là bắt buộc và phải có ít nhất 2 ký tự';
+    }
+    
+    if (!formData.shopAddress || formData.shopAddress.trim().length < 10) {
+      newErrors.shopAddress = 'Địa chỉ là bắt buộc và phải có ít nhất 10 ký tự';
+    }
+    
+    if (!formData.phone) {
+      newErrors.phone = 'Số điện thoại là bắt buộc';
+    } else if (!validatePhone(formData.phone)) {
+      newErrors.phone = 'Số điện thoại không hợp lệ';
+    }
+    
+    if (!formData.email) {
+      newErrors.email = 'Email là bắt buộc';
+    } else if (!validateEmail(formData.email)) {
+      newErrors.email = 'Email không hợp lệ';
+    }
+    
+    // Validate opening/closing times
+    if (formData.openingTime && formData.closingTime) {
+      const opening = formData.openingTime.split(':').map(Number);
+      const closing = formData.closingTime.split(':').map(Number);
+      const openingMinutes = opening[0] * 60 + opening[1];
+      const closingMinutes = closing[0] * 60 + closing[1];
+      
+      if (closingMinutes <= openingMinutes) {
+        newErrors.closingTime = 'Giờ đóng cửa phải sau giờ mở cửa';
+      }
+    }
+    
+    // Validate optional but important fields
+    if (formData.idCardNumber && !validateIDCard(formData.idCardNumber)) {
+      newErrors.idCardNumber = 'CCCD phải có 9 hoặc 12 số';
+    }
+    
+    if (formData.taxCode && !validateTaxCode(formData.taxCode)) {
+      newErrors.taxCode = 'Mã số thuế không hợp lệ';
+    }
+    
+    if (formData.businessLicenseNumber && !validateBusinessLicense(formData.businessLicenseNumber)) {
+      newErrors.businessLicenseNumber = 'Số giấy phép kinh doanh không hợp lệ';
+    }
+    
+    if (formData.bankAccountNumber && !validateBankAccount(formData.bankAccountNumber)) {
+      newErrors.bankAccountNumber = 'Số tài khoản phải từ 8-20 chữ số';
+    }
+    
+    // Check if there are any validation errors
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      setPopup({ open: true, type: 'error', message: '⚠️ Vui lòng kiểm tra lại thông tin đã nhập' });
+      // Scroll to first error
+      const firstErrorField = document.querySelector('.error-field');
+      if (firstErrorField) {
+        firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
 
